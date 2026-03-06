@@ -6,18 +6,24 @@ Each section below mirrors the structure of the original SRS (`SRS.md`).  When w
 
 ## Requirements Summary
 
-- **Actors:** Incident Creators and Issue Responders (site engineers).
-- **Authentication:** Email/password registration and login; role-based access control.
+- **Actors:** Incident Creators, Issue Responders (site engineers), plus an optional Administrator role.
+- **Authentication:** Email/password registration and login; role-based access control including password reset and account management.
 - **Creators can:**
-  - Register, log in, create issues with title and description.
-  - View a dashboard of their own issues.
+  - Register, log in, create issues with title, description, priority, category, and attachments.
+  - View and search/filter a dashboard of their own issues.
   - Comment on their issues.
   - Change issue status (`Open` ↔ `In-Process` ↔ `Closed`) within defined rules.
 - **Responders can:**
   - Log in and see issues assigned to them.
   - Add comments/responses to assigned issues.
-  - Update status (`Open` → `In-Process` → `Closed`).
-- **Data:** Each issue has creator, responder, status, timestamps, comments; only visible to permitted users.
+  - Update status (`Open` → `In-Process` → `Closed`); reopen closed issues if needed.
+- **Administrators can:**
+  - Manage user accounts (activate/deactivate, reset passwords).
+  - View all issues, reassign or configure routing rules, access dashboards and reports.
+- **Routing service:** Issues are automatically routed to available engineers based on availability and SLA rules; manual override is possible.
+- **Notifications:** Email or in-app alerts on assignments, status changes, comments, or reassignment.
+- **Search & filters:** Support searching by keywords and filtering by status, priority, tags, dates, assignee.
+- **Data:** Each issue has creator, responder, status, timestamps, comments, priority, tags, attachments, audit trail; visibility controlled by roles.
 
 ## Non-functional
 
