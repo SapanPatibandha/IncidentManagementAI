@@ -1,0 +1,11 @@
+{
+  "name": "incident-management-ai",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "devDependencies": {
+    "turbo": "^1.10.0"
+  }
+}
