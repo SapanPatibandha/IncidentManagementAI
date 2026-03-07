@@ -7,10 +7,12 @@ description: >
   up an API gateway, defining inter-service communication, writing CI/CD pipelines, or making
   any infrastructure or deployment decision. Trigger on any mention of: microservice, service,
   gateway, docker, kubernetes, react app, frontend, backend, database schema, message broker,
-  kafka, rabbitmq, postgres, mongodb, auth service, notification service, incident service,
-  user service, API gateway, monorepo, deployment, environment variables, or tech stack.
-  This skill is the authoritative technical blueprint — all generated code must conform to
-  the service boundaries, tech choices, and patterns defined here.
+  kafka, rabbitmq, postgres, mongodb, identity service, auth, oauth, jwt, notification service,
+  incident service, user service, API gateway, monorepo, deployment, environment variables,
+  or tech stack. This skill is the authoritative technical blueprint — all generated code must
+  conform to the service boundaries, tech choices, and patterns defined here.
+  CRITICAL: Authentication and identity is handled exclusively by the external IdentityService
+  repo (github.com/SapanPatibandha/IdentityService) — do NOT build a custom auth-service.
 ---
 
 # Incident Management AI — Technical Architecture Skill
@@ -27,27 +29,28 @@ Dockerfile, API contract, or infrastructure config.
 
 ## Quick Reference
 
-| Concern              | Decision                                              |
-|----------------------|-------------------------------------------------------|
-| Architecture style   | Microservices + Event Sourcing + CQRS                 |
-| Monorepo tool        | Turborepo (or Nx) — single Git repo, multiple packages|
-| Frontend             | React 18 + TypeScript + Vite + Tailwind CSS           |
-| Backend language     | Node.js + TypeScript (all services)                   |
-| Backend framework    | Fastify (lightweight, schema-first)                   |
-| Event bus            | RabbitMQ (AMQP) — async inter-service messaging       |
-| Event store          | PostgreSQL (append-only `events` table per service)   |
-| Read models DB       | PostgreSQL (separate schema per service)              |
-| Auth mechanism       | JWT (access token) + Refresh token (httpOnly cookie)  |
-| API Gateway          | Node.js + Fastify (custom, handles auth + routing)    |
-| Containerization     | Docker + Docker Compose (dev), Kubernetes (prod)      |
-| CI/CD                | GitHub Actions                                        |
-| Secret management    | Environment variables via `.env` + Docker secrets     |
+| Concern              | Decision                                                              |
+|----------------------|-----------------------------------------------------------------------|
+| Architecture style   | Microservices + Event Sourcing + CQRS                                 |
+| Monorepo tool        | Turborepo (or Nx) — single Git repo, multiple packages                |
+| Frontend             | React 18 + TypeScript + Vite + Tailwind CSS                           |
+| Backend language     | Node.js + TypeScript (all services except IdentityService)            |
+| Backend framework    | Fastify (lightweight, schema-first)                                   |
+| Event bus            | RabbitMQ (AMQP) — async inter-service messaging                       |
+| Event store          | PostgreSQL (append-only `events` table per service)                   |
+| Read models DB       | PostgreSQL (separate schema per service)                              |
+| **Identity & Auth**  | **External IdentityService (.NET 10 + PostgreSQL) — OAuth 2.0 + JWT** |
+| Auth token type      | JWT signed with RSA asymmetric keys (issued by IdentityService)       |
+| API Gateway          | Node.js + Fastify — verifies JWT using IdentityService public key     |
+| Containerization     | Docker + Docker Compose (dev), Kubernetes (prod)                      |
+| CI/CD                | GitHub Actions                                                        |
+| Secret management    | Environment variables via `.env` + Docker secrets                     |
 
 ---
 
 ## Service Inventory
 
-The system is composed of **5 backend microservices** + **1 React frontend** + **1 API Gateway**.
+The system is composed of **1 external IdentityService** + **4 backend microservices** + **1 React frontend** + **1 API Gateway**.
 
 ```
 ┌─────────────────────────────────────────────────────────┐
@@ -58,55 +61,113 @@ The system is composed of **5 backend microservices** + **1 React frontend** + *
                             ▼
 ┌─────────────────────────────────────────────────────────┐
 │                      API Gateway                         │
-│         (Auth verification + route forwarding)          │
+│   JWT verify (RSA public key) + route forwarding        │
 └──┬──────────┬───────────┬────────────┬──────────────────┘
    │          │           │            │
    ▼          ▼           ▼            ▼
-┌──────┐ ┌────────┐ ┌──────────┐ ┌──────────────┐
-│ Auth │ │Incident│ │   User   │ │Notification  │
-│Service│ │Service │ │ Service  │ │   Service    │
-└──────┘ └────────┘ └──────────┘ └──────────────┘
-                         │
-                         ▼
-                  ┌─────────────┐
-                  │  Analytics  │
-                  │   Service   │
-                  └─────────────┘
+┌────────────────┐ ┌────────┐ ┌──────────┐ ┌──────────────┐
+│IdentityService │ │Incident│ │   User   │ │Notification  │
+│ (.NET 10)      │ │Service │ │ Service  │ │   Service    │
+│ OAuth2 + JWT   │ └────────┘ └──────────┘ └──────────────┘
+│ Port: 8080     │               │
+│ (external repo)│               ▼
+└────────────────┘        ┌─────────────┐
+                          │  Analytics  │
+                          │   Service   │
+                          └─────────────┘
 
-All services communicate async via: RabbitMQ Event Bus
+All internal services communicate async via: RabbitMQ Event Bus
+IdentityService is a standalone service — integrated via OAuth2/JWT only
 ```
 
 ---
 
 ## Service Definitions
 
-### 1. `auth-service` — Port 3001
-**Responsibility:** User registration, login, JWT issuance, token refresh, password reset
+### 1. `IdentityService` — Port 8080 (external repo)
+**Repo:** `https://github.com/SapanPatibandha/IdentityService`  
+**Tech stack:** .NET 10 + PostgreSQL + Clean Architecture  
+**Responsibility:** All authentication and authorization for the entire platform. This is a **pre-built, standalone service** — do NOT rewrite or duplicate any of its functionality in other services.
 
-| Domain Events Emitted         | Trigger                         |
-|-------------------------------|---------------------------------|
-| `UserRegistered`              | New user signs up               |
-| `UserLoggedIn`                | Successful login                |
-| `PasswordResetRequested`      | Password reset initiated        |
-| `PasswordResetCompleted`      | Password successfully reset     |
+**Key capabilities used by this system:**
+- OAuth 2.0 Authorization Code flow (for web app login)
+- Client Credentials grant (for service-to-service calls)
+- JWT issuance signed with **RSA asymmetric keys**
+- Token refresh + revocation
+- Scope-based access control: `api:featureName:action` pattern
+- Username/password + bcrypt hashing
+- Two-Factor Authentication (TOTP + email codes)
+- Email verification on registration
+- Account lockout after 5 failed attempts
+- Multi-tenant OAuth2 client management
+- Audit logs via `GET /api/v1/admin/audit-logs`
 
-**Key Commands:** `RegisterUser`, `LoginUser`, `RefreshToken`, `RequestPasswordReset`, `ResetPassword`
+**Scopes to register for this system:**
+| Scope                        | Granted to                  | Allows                          |
+|------------------------------|-----------------------------|---------------------------------|
+| `api:incidents:read`         | IncidentCreator, Responder  | Read own/assigned incidents     |
+| `api:incidents:write`        | IncidentCreator             | Create incidents, add comments  |
+| `api:incidents:manage`       | IssueResponder              | Transition status, add comments |
+| `api:incidents:admin`        | Administrator               | Full incident access + assign   |
+| `api:users:read`             | Administrator               | View all users + responders     |
+| `api:users:manage`           | Administrator               | Change roles, manage users      |
+| `api:analytics:read`         | Administrator               | View dashboard + export         |
+| `api:notifications:read`     | All authenticated users     | Read own notifications          |
 
-**Database:** PostgreSQL — `auth_db`
-- `events` table (event store — append only)
-- `user_read_models` table (projection: id, email, role, created_at, is_active)
+**OAuth2 Client to register:**
+- Client name: `incident-management-web`
+- Grant type: `authorization_code` + `refresh_token`
+- Redirect URI: `http://localhost:5173/auth/callback` (dev)
 
-**API Routes (internal, via gateway):**
+**API endpoints used by gateway:**
 ```
-POST /auth/register
-POST /auth/login
-POST /auth/logout
-POST /auth/refresh
-POST /auth/password-reset/request
-POST /auth/password-reset/confirm
+POST /api/v1/auth/token          — exchange code for JWT
+POST /api/v1/auth/refresh        — refresh access token
+POST /api/v1/auth/revoke         — logout / revoke token
+GET  /api/v1/admin/users         — Admin: list users
+GET  /openapi/v1.json            — Swagger spec
 ```
 
----
+**JWT payload structure (issued by IdentityService):**
+```json
+{
+  "sub": "user-uuid",
+  "email": "user@example.com",
+  "scope": "api:incidents:write api:notifications:read",
+  "client_id": "incident-management-web",
+  "iat": 1700000000,
+  "exp": 1700003600
+}
+```
+
+**Integration rules for all other services:**
+- NEVER build login, registration, or token issuance logic in any other service
+- The API gateway validates JWT using IdentityService's **RSA public key** (fetched from `/.well-known/jwks.json` or configured as env var)
+- Gateway extracts `sub` (userId), `scope`, and `email` from the token and injects them as request headers: `x-user-id`, `x-user-scopes`, `x-user-email`
+- Downstream services trust these headers — they never re-verify the JWT
+- Role mapping (IncidentCreator / IssueResponder / Administrator) is derived from scopes
+
+**Role ↔ Scope mapping (enforced at gateway):**
+| Role               | Required scope prefix         |
+|--------------------|-------------------------------|
+| IncidentCreator    | `api:incidents:write`         |
+| IssueResponder     | `api:incidents:manage`        |
+| Administrator      | `api:incidents:admin`         |
+
+**Docker Compose integration:**
+```yaml
+identity-service:
+  image: sapanpatibandha/identity-service:latest  # or build from repo
+  ports: ["8080:8080"]
+  environment:
+    - ConnectionStrings__DefaultConnection=Host=postgres-identity;Database=identity_db;...
+    - Jwt__RsaPrivateKey=<base64-encoded-private-key>
+  depends_on: [postgres-identity]
+
+postgres-identity:
+  image: postgres:16
+  environment: { POSTGRES_DB: identity_db, ... }
+```
 
 ### 2. `incident-service` — Port 3002
 **Responsibility:** Full incident lifecycle — create, status transitions, comments, assignments
@@ -264,8 +325,7 @@ GET /analytics/export?format=csv|json
 ```
 incident-management-ai/
 ├── apps/
-│   ├── api-gateway/          # Fastify API gateway
-│   ├── auth-service/         # Auth microservice
+│   ├── api-gateway/          # Fastify API gateway (JWT verify via IdentityService JWKS)
 │   ├── incident-service/     # Incident microservice
 │   ├── user-service/         # User microservice
 │   ├── notification-service/ # Notification microservice
@@ -274,11 +334,11 @@ incident-management-ai/
 ├── packages/
 │   ├── shared-types/         # TypeScript types shared across services
 │   ├── event-contracts/      # Event envelope types + RabbitMQ exchange names
-│   ├── auth-utils/           # JWT verify helper (used by gateway + services)
+│   ├── identity-client/      # Typed HTTP client for IdentityService API (admin calls)
 │   └── logger/               # Shared structured logger (pino)
 ├── infra/
 │   ├── docker/               # Per-service Dockerfiles
-│   ├── docker-compose.yml    # Full local dev stack
+│   ├── docker-compose.yml    # Full local dev stack (includes IdentityService)
 │   ├── docker-compose.test.yml
 │   └── k8s/                  # Kubernetes manifests (prod)
 ├── .github/
@@ -286,6 +346,9 @@ incident-management-ai/
 ├── turbo.json                # Turborepo config
 ├── package.json              # Workspace root
 └── README.md
+
+# IdentityService lives in a SEPARATE repo alongside this one:
+# ../IdentityService/         # github.com/SapanPatibandha/IdentityService
 ```
 
 ---
@@ -360,28 +423,34 @@ apps/<service-name>/
 ## Authentication & Authorization Flow
 
 ```
-1. Client → POST /auth/login → Gateway → auth-service
-2. auth-service returns: { accessToken, refreshToken (httpOnly cookie) }
-3. Client stores accessToken in memory (NOT localStorage)
-4. Every request: Authorization: Bearer <accessToken>
-5. Gateway verifies JWT signature + expiry
-6. Gateway injects: x-user-id, x-user-role headers to upstream service
-7. Services trust these headers (only accept requests from gateway)
-8. On 401: Client uses refresh token to get new access token silently
+1. User clicks "Login" in React app
+2. React app redirects to IdentityService: GET /oauth/authorize?client_id=...&scope=...
+3. IdentityService handles login UI, 2FA, email verification
+4. IdentityService redirects back to React: /auth/callback?code=...
+5. React app sends code → API Gateway → IdentityService POST /api/v1/auth/token
+6. IdentityService returns: { access_token (JWT), refresh_token, expires_in }
+7. React stores access_token in memory (NOT localStorage), refresh_token in httpOnly cookie
+8. Every API request: Authorization: Bearer <access_token>
+9. Gateway validates JWT signature using IdentityService RSA public key
+10. Gateway extracts sub, scope, email → injects x-user-id, x-user-scopes, x-user-email headers
+11. Downstream services use injected headers — never re-verify JWT
+12. On 401: React silently calls POST /api/v1/auth/refresh using httpOnly cookie
 ```
 
-**JWT Payload:**
-```json
-{
-  "sub": "user-uuid",
-  "role": "IncidentCreator | IssueResponder | Administrator",
-  "iat": 1700000000,
-  "exp": 1700003600
+**Role derived from scopes (gateway logic):**
+```typescript
+function deriveRole(scopes: string[]): string {
+  if (scopes.includes('api:incidents:admin')) return 'Administrator';
+  if (scopes.includes('api:incidents:manage')) return 'IssueResponder';
+  if (scopes.includes('api:incidents:write')) return 'IncidentCreator';
+  throw new UnauthorizedException();
 }
 ```
 
-**Access token TTL:** 15 minutes  
-**Refresh token TTL:** 7 days
+**RSA public key setup (API Gateway):**
+- Fetch from `http://identity-service:8080/.well-known/jwks.json` on startup
+- Cache the key, refresh every 24h
+- Verify every JWT with this key before forwarding any request
 
 ---
 
@@ -429,19 +498,24 @@ DATABASE_URL=postgresql://user:pass@localhost:5432/service_db
 # RabbitMQ
 RABBITMQ_URL=amqp://user:pass@localhost:5672
 
-# Auth (all services except auth-service itself)
-JWT_PUBLIC_KEY=<rsa-public-key-or-shared-secret>
-
-# Auth service only
-JWT_PRIVATE_KEY=<rsa-private-key>
-JWT_ACCESS_TTL=900
-JWT_REFRESH_TTL=604800
+# IdentityService integration (all services + gateway)
+IDENTITY_SERVICE_URL=http://identity-service:8080
+IDENTITY_SERVICE_JWKS_URL=http://identity-service:8080/.well-known/jwks.json
+# RSA public key can also be set directly as alternative to JWKS URL:
+# IDENTITY_SERVICE_RSA_PUBLIC_KEY=<base64-encoded-rsa-public-key>
 
 # Notification service only
 SMTP_HOST=smtp.mailtrap.io
 SMTP_PORT=2525
 SMTP_USER=
 SMTP_PASS=
+```
+
+**IdentityService itself** uses its own env vars (see its repo). Key ones to configure in docker-compose:
+```env
+# Set in identity-service container
+Jwt__RsaPrivateKey=<base64-encoded-private-key>
+ConnectionStrings__DefaultConnection=Host=postgres-identity;Database=identity_db;Username=...;Password=...
 ```
 
 ---
@@ -456,30 +530,59 @@ services:
     image: rabbitmq:3-management
     ports: ["5672:5672", "15672:15672"]
 
-  postgres-auth:
+  # IdentityService — external repo, handles all auth
+  postgres-identity:
     image: postgres:16
-    environment: { POSTGRES_DB: auth_db, ... }
+    environment: { POSTGRES_DB: identity_db, POSTGRES_USER: ..., POSTGRES_PASSWORD: ... }
+
+  identity-service:
+    build:
+      context: ../IdentityService   # path to cloned IdentityService repo
+      dockerfile: Dockerfile
+    ports: ["8080:8080"]
+    environment:
+      - ConnectionStrings__DefaultConnection=Host=postgres-identity;Database=identity_db;...
+      - Jwt__RsaPrivateKey=<base64-key>
+    depends_on: [postgres-identity]
 
   postgres-incident:
     image: postgres:16
     environment: { POSTGRES_DB: incident_db, ... }
 
-  # ... one postgres instance per service (or shared with different DBs)
+  postgres-user:
+    image: postgres:16
+    environment: { POSTGRES_DB: user_db, ... }
 
-  auth-service:
-    build: ./apps/auth-service
-    depends_on: [rabbitmq, postgres-auth]
+  postgres-notification:
+    image: postgres:16
+    environment: { POSTGRES_DB: notification_db, ... }
+
+  postgres-analytics:
+    image: postgres:16
+    environment: { POSTGRES_DB: analytics_db, ... }
 
   incident-service:
     build: ./apps/incident-service
-    depends_on: [rabbitmq, postgres-incident]
+    depends_on: [rabbitmq, postgres-incident, identity-service]
 
-  # ... all other services
+  user-service:
+    build: ./apps/user-service
+    depends_on: [rabbitmq, postgres-user, identity-service]
+
+  notification-service:
+    build: ./apps/notification-service
+    depends_on: [rabbitmq, postgres-notification]
+
+  analytics-service:
+    build: ./apps/analytics-service
+    depends_on: [rabbitmq, postgres-analytics]
 
   api-gateway:
     build: ./apps/api-gateway
     ports: ["3000:3000"]
-    depends_on: [auth-service, incident-service, ...]
+    environment:
+      - IDENTITY_SERVICE_JWKS_URL=http://identity-service:8080/.well-known/jwks.json
+    depends_on: [identity-service, incident-service, user-service, notification-service, analytics-service]
 
   web-app:
     build: ./apps/web-app

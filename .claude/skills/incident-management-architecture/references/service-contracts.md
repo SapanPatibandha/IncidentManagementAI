@@ -5,68 +5,56 @@ frontend API calls, or gateway proxy rules.
 
 ---
 
-## auth-service
+## IdentityService (external — port 8080)
 
-### POST /auth/register
-**Request:**
-```json
-{
-  "email": "user@example.com",
-  "password": "SecurePassword123!",
-  "name": "Jane Smith"
-}
+> This service is pre-built. Do NOT re-implement any of these endpoints.
+> Full Swagger spec at: `http://localhost:8080/openapi/v1.json`
+
+### OAuth2 Authorization Code Flow (used by React app)
+
+**Step 1 — Redirect user to login:**
 ```
-**Response 201:**
-```json
-{
-  "userId": "uuid",
-  "email": "user@example.com",
-  "role": "IncidentCreator",
-  "message": "Registration successful. Please verify your email."
-}
+GET http://localhost:8080/oauth/authorize
+  ?response_type=code
+  &client_id=incident-management-web
+  &redirect_uri=http://localhost:5173/auth/callback
+  &scope=api:incidents:write api:notifications:read
+  &state=<random-csrf-token>
 ```
-**Errors:** 400 (validation), 409 (email already registered)
 
----
+**Step 2 — Exchange code for tokens (via API Gateway):**
+```
+POST /api/v1/auth/token
+Content-Type: application/x-www-form-urlencoded
 
-### POST /auth/login
-**Request:**
-```json
-{ "email": "user@example.com", "password": "SecurePassword123!" }
+grant_type=authorization_code&code=<code>&redirect_uri=...&client_id=...&client_secret=...
 ```
 **Response 200:**
 ```json
 {
-  "accessToken": "eyJ...",
-  "user": { "userId": "uuid", "name": "Jane Smith", "role": "IncidentCreator" }
+  "access_token": "eyJ...",
+  "refresh_token": "...",
+  "token_type": "Bearer",
+  "expires_in": 900,
+  "scope": "api:incidents:write api:notifications:read"
 }
 ```
-Sets `refreshToken` as httpOnly cookie.
 
-**Errors:** 401 (invalid credentials), 403 (account disabled)
-
----
-
-### POST /auth/refresh
-Sends refreshToken cookie automatically.
-**Response 200:**
+### POST /api/v1/auth/refresh
 ```json
-{ "accessToken": "eyJ..." }
+{ "refresh_token": "..." }
 ```
 
----
+### POST /api/v1/auth/revoke (logout)
+```json
+{ "token": "...", "token_type_hint": "refresh_token" }
+```
 
-### POST /auth/password-reset/request
-**Request:** `{ "email": "user@example.com" }`
-**Response 200:** `{ "message": "Reset link sent if email exists" }`
-
----
-
-### POST /auth/password-reset/confirm
-**Request:** `{ "token": "reset-token-from-email", "newPassword": "NewPass123!" }`
-**Response 200:** `{ "message": "Password updated successfully" }`
+### GET /.well-known/jwks.json
+Returns RSA public key — API Gateway fetches this on startup to verify all JWTs.
 
 ---
+
 
 ## incident-service
 

@@ -43,37 +43,29 @@ Examples:
 
 ---
 
-## Auth Service Events
+## Auth / Identity Events
 
-### `UserRegistered`
-**Routing key:** `auth.user.UserRegistered`
-**Consumed by:** notification-service, user-service
-```json
-{
-  "payload": {
-    "userId": "uuid",
-    "email": "user@example.com",
-    "name": "Jane Smith",
-    "role": "IncidentCreator"
-  }
-}
-```
+> **Important:** The external IdentityService does NOT connect to this system's RabbitMQ.
+> Identity events are handled via a **webhook or polling bridge** pattern:
+> - The `user-service` polls `GET /api/v1/admin/users` on IdentityService at startup + on demand
+> - Alternatively, configure IdentityService webhooks to POST to an internal endpoint in `user-service`
+> - Once user data is synced into `user-service`, it publishes internal events to RabbitMQ as needed
 
-### `PasswordResetRequested`
-**Routing key:** `auth.user.PasswordResetRequested`
+### `UserSynced` (published by user-service after syncing from IdentityService)
+**Routing key:** `user.user.UserSynced`
 **Consumed by:** notification-service
 ```json
 {
   "payload": {
     "userId": "uuid",
     "email": "user@example.com",
-    "resetToken": "hashed-token",
-    "expiresAt": "2024-01-15T11:30:00Z"
+    "role": "IncidentCreator",
+    "syncedAt": "2024-01-15T10:30:00Z"
   }
 }
 ```
 
----
+
 
 ## Incident Service Events
 
@@ -217,9 +209,9 @@ Examples:
 
 | Consumer Service       | Queue Name                     | Bound Routing Keys                                                                 |
 |------------------------|-------------------------------|------------------------------------------------------------------------------------|
-| notification-service   | `notifications.queue`          | `incident.incident.*`, `auth.user.UserRegistered`, `auth.user.PasswordResetRequested` |
+| notification-service   | `notifications.queue`          | `incident.incident.*`, `user.user.UserSynced`                                      |
 | analytics-service      | `analytics.queue`              | `incident.incident.*`                                                              |
-| user-service           | `userservice.queue`            | `auth.user.UserRegistered`, `incident.incident.IncidentAssigned`, `incident.incident.IncidentClosed` |
+| user-service           | `userservice.queue`            | `incident.incident.IncidentAssigned`, `incident.incident.IncidentClosed`           |
 | incident-service       | `incidentservice.queue`        | `user.user.ResponderAvailabilitySet`                                               |
 
 ---
