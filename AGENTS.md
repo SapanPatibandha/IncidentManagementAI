@@ -47,14 +47,14 @@ A microservices-based Incident Management platform with:
 - [X] **Phase 1** — IdentityService integration (OAuth2 client + scopes configured)
 - [X] **Phase 2** — API Gateway (JWT verify + routing)
 - [X] **Phase 3** — Incident Service (core domain — Event Sourcing)
-- [ ] **Phase 4** — User Service
+- [X] **Phase 4** — User Service
 - [ ] **Phase 5** — Notification Service
 - [ ] **Phase 6** — Analytics Service
 - [ ] **Phase 7** — React Frontend
 - [ ] **Phase 8** — Integration Testing
 - [ ] **Phase 9** — CI/CD
 
-**Currently working on:** Phase 0 — starting fresh
+**Currently working on:** Phase 5 — Notification Service
 
 ---
 

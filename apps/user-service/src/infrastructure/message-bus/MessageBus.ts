@@ -10,7 +10,7 @@ export class MessageBus {
   async connect(): Promise<void> {
     this.connection = await connect(env.RABBITMQ_URL);
     this.channel = await this.connection.createChannel();
-    await this.channel.assertExchange(EXCHANGES.INCIDENT_EVENTS, 'topic', { durable: true });
+    await this.channel.assertExchange(EXCHANGES.USER_EVENTS, 'topic', { durable: true });
   }
 
   async publish(event: DomainEvent): Promise<void> {
@@ -26,21 +26,17 @@ export class MessageBus {
     };
 
     const routingKey = this.getRoutingKey(event.eventType);
-    this.channel.publish(EXCHANGES.INCIDENT_EVENTS, routingKey, Buffer.from(JSON.stringify(envelope)));
+    this.channel.publish(EXCHANGES.USER_EVENTS, routingKey, Buffer.from(JSON.stringify(envelope)));
   }
 
   private getRoutingKey(eventType: string): string {
     switch (eventType) {
-      case 'IncidentCreated':
-        return 'incident.created';
-      case 'StatusChanged':
-        return 'incident.updated';
-      case 'CommentAdded':
-        return 'incident.updated';
-      case 'IncidentAssigned':
-        return 'incident.updated';
+      case 'UserRegistered':
+        return 'user.registered';
+      case 'UserProfileUpdated':
+        return 'user.updated';
       default:
-        return 'incident.updated';
+        return 'user.updated';
     }
   }
 

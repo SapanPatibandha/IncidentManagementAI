@@ -1,0 +1,29 @@
+{
+  "name": "user-service",
+  "version": "0.0.0",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx watch src/main.ts",
+    "start": "node dist/main.js",
+    "test": "vitest",
+    "test:watch": "vitest --watch"
+  },
+  "dependencies": {
+    "fastify": "^4.0.0",
+    "@fastify/cors": "^8.0.0",
+    "pg": "^8.0.0",
+    "amqplib": "^0.10.0",
+    "zod": "^3.0.0",
+    "@incident-management-ai/logger": "file:../../packages/logger",
+    "@incident-management-ai/shared-types": "file:../../packages/shared-types",
+    "@incident-management-ai/event-contracts": "file:../../packages/event-contracts"
+  },
+  "devDependencies": {
+    "typescript": "^5.0.0",
+    "@types/node": "^20.0.0",
+    "@types/pg": "^8.0.0",
+    "@types/amqplib": "^0.10.0",
+    "tsx": "^3.0.0",
+    "vitest": "^0.34.0"
+  }
+}

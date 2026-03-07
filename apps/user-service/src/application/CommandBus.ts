@@ -1,5 +1,5 @@
 import { DomainCommand } from '../domain/commands/BaseCommand';
-import { IncidentAggregate } from '../domain/aggregates/IncidentAggregate';
+import { UserAggregate } from '../domain/aggregates/UserAggregate';
 import { EventStore } from '../infrastructure/event-store/EventStore';
 import { MessageBus } from '../infrastructure/message-bus/MessageBus';
 
@@ -11,7 +11,7 @@ export class CommandBus {
 
   async execute(command: DomainCommand): Promise<void> {
     const events = await this.eventStore.getEvents(command.aggregateId);
-    const aggregate = IncidentAggregate.rehydrate(command.aggregateId, events);
+    const aggregate = UserAggregate.rehydrate(command.aggregateId, events);
     const newEvents = aggregate.handle(command);
 
     await this.eventStore.saveEvents(command.aggregateId, newEvents);

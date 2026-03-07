@@ -39,14 +39,21 @@ services:
     ports:
       - "5436:5432"
 
-  rabbitmq:
-    image: rabbitmq:3-management
+  user-service:
+    build:
+      context: ..
+      dockerfile: apps/user-service/Dockerfile
     environment:
-      RABBITMQ_DEFAULT_USER: admin
-      RABBITMQ_DEFAULT_PASS: password
+      NODE_ENV: development
+      PORT: 3003
+      DATABASE_URL: postgresql://postgres:password@postgres-user:5432/user_db
+      RABBITMQ_URL: amqp://admin:password@rabbitmq:5672
+      LOG_LEVEL: info
     ports:
-      - "5672:5672"
-      - "15672:15672"
+      - "3003:3003"
+    depends_on:
+      - postgres-user
+      - rabbitmq
 
   identity-service:
     image: your-identity-service-image:latest  # Replace with actual image
