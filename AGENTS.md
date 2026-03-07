@@ -46,7 +46,7 @@ A microservices-based Incident Management platform with:
 - [X] **Phase 0** — Shared Foundation (monorepo, shared packages)
 - [X] **Phase 1** — IdentityService integration (OAuth2 client + scopes configured)
 - [X] **Phase 2** — API Gateway (JWT verify + routing)
-- [ ] **Phase 3** — Incident Service (core domain — Event Sourcing)
+- [X] **Phase 3** — Incident Service (core domain — Event Sourcing)
 - [ ] **Phase 4** — User Service
 - [ ] **Phase 5** — Notification Service
 - [ ] **Phase 6** — Analytics Service
