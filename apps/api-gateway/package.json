@@ -1,0 +1,25 @@
+{
+  "name": "api-gateway",
+  "version": "0.0.0",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx watch src/main.ts",
+    "start": "node dist/main.js"
+  },
+  "dependencies": {
+    "fastify": "^4.0.0",
+    "@fastify/cors": "^8.0.0",
+    "@fastify/rate-limit": "^8.0.0",
+    "@fastify/http-proxy": "^9.0.0",
+    "jose": "^4.0.0",
+    "zod": "^3.0.0",
+    "fastify-plugin": "^4.0.0",
+    "@incident-management-ai/logger": "file:../../packages/logger",
+    "@incident-management-ai/shared-types": "file:../../packages/shared-types"
+  },
+  "devDependencies": {
+    "typescript": "^5.0.0",
+    "@types/node": "^20.0.0",
+    "tsx": "^3.0.0"
+  }
+}

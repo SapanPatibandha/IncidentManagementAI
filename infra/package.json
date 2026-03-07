@@ -1,0 +1,10 @@
+{
+  "name": "register-client",
+  "version": "1.0.0",
+  "scripts": {
+    "register": "npx ts-node register-client.ts"
+  },
+  "devDependencies": {
+    "ts-node": "^10.9.0"
+  }
+}
