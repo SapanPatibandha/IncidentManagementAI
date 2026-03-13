@@ -55,6 +55,26 @@ services:
       - postgres-user
       - rabbitmq
 
+  notification-service:
+    build:
+      context: ..
+      dockerfile: apps/notification-service/Dockerfile
+    environment:
+      NODE_ENV: development
+      PORT: 3004
+      DATABASE_URL: postgresql://postgres:password@postgres-notification:5432/notification_db
+      RABBITMQ_URL: amqp://admin:password@rabbitmq:5672
+      LOG_LEVEL: info
+      MAIL_HOST: smtp.mailtrap.io
+      MAIL_PORT: 2525
+      MAIL_USER: your_mailtrap_user
+      MAIL_PASS: your_mailtrap_pass
+    ports:
+      - "3004:3004"
+    depends_on:
+      - postgres-notification
+      - rabbitmq
+
   identity-service:
     image: your-identity-service-image:latest  # Replace with actual image
     environment:

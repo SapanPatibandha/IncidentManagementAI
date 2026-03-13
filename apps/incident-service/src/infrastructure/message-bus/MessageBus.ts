@@ -30,18 +30,8 @@ export class MessageBus {
   }
 
   private getRoutingKey(eventType: string): string {
-    switch (eventType) {
-      case 'IncidentCreated':
-        return 'incident.created';
-      case 'StatusChanged':
-        return 'incident.updated';
-      case 'CommentAdded':
-        return 'incident.updated';
-      case 'IncidentAssigned':
-        return 'incident.updated';
-      default:
-        return 'incident.updated';
-    }
+    // Follow "incident.incident.<EventName>" pattern (per architecture docs)
+    return `incident.incident.${eventType}`;
   }
 
   async close(): Promise<void> {
