@@ -3,15 +3,142 @@
 Framework-specific folder layouts. Use the one matching the project.
 
 ## Table of Contents
-1. [Node.js / TypeScript (NestJS or plain)](#nodejs)
-2. [Python (FastAPI / Django)](#python)
-3. [Java Spring Boot](#java)
-4. [Go](#go)
-5. [Database Schemas](#databases)
+1. [C#](#csharp)
+2. [Go](#go)
+3. [Java / Spring](#java)
+4. [TypeScript / Node.js (NestJS or plain)](#nodejs)
+5. [Python (FastAPI / Django)](#python)
+6. [Database Schemas](#databases)
 
 ---
 
-## Node.js / TypeScript {#nodejs}
+## C# {#csharp}
+
+```
+project-root/
+├── src/
+│   ├── Domain/
+│   │   ├── Events/
+│   │   │   ├── DomainEvent.cs         # Base domain event
+│   │   │   ├── OrderPlacedEvent.cs
+│   │   │   └── OrderConfirmedEvent.cs
+│   │   ├── Commands/
+│   │   │   ├── PlaceOrderCommand.cs
+│   │   │   └── ConfirmOrderCommand.cs
+│   │   ├── Aggregates/
+│   │   │   ├── AggregateRoot.cs
+│   │   │   └── Order.cs
+│   │   └── ValueObjects/
+│   │       └── Money.cs
+│   ├── Application/
+│   │   ├── CommandHandlers/
+│   │   │   ├── PlaceOrderHandler.cs
+│   │   │   └── ConfirmOrderHandler.cs
+│   │   └── QueryHandlers/
+│   │       └── GetOrderHandler.cs
+│   ├── Infrastructure/
+│   │   ├── EventStore/
+│   │   │   ├── IEventStore.cs         # interface
+│   │   │   ├── InMemoryEventStore.cs  # for tests
+│   │   │   └── PostgresEventStore.cs  # production
+│   │   ├── Projections/
+│   │   │   └── OrderListProjection.cs
+│   │   └── ReadModels/
+│   │       └── OrderReadModel.cs
+│   └── Api/
+│       ├── Controllers/
+│       │   ├── OrderCommandController.cs
+│       │   └── OrderQueryController.cs
+│       └── Startup.cs
+├── tests/
+│   ├── Unit/
+│   │   └── Aggregates/
+│   └── Integration/
+└── IncidentManagementAI.sln
+```
+
+---
+
+## Go {#go}
+
+```
+project-root/
+├── internal/
+│   ├── domain/
+│   │   ├── events/
+│   │   │   ├── event.go               # DomainEvent struct + constructor
+│   │   │   └── order_events.go
+│   │   ├── commands/
+│   │   │   └── order_commands.go
+│   │   ├── aggregates/
+│   │   │   ├── aggregate.go           # AggregateRoot base
+│   │   │   └── order.go
+│   │   └── valueobjects/
+│   │       └── money.go
+│   ├── application/
+│   │   ├── handlers/
+│   │   │   ├── place_order.go
+│   │   │   └── get_order.go
+│   │   └── ports/
+│   │       └── event_store.go         # Interface (port)
+│   └── infrastructure/
+│       ├── eventstore/
+│       │   ├── inmemory.go
+│       │   └── postgres.go
+│       ├── projections/
+│       │   └── order_list.go
+│       └── readmodels/
+│           └── order_repo.go
+├── cmd/
+│   └── api/
+│       └── main.go
+└── go.mod
+```
+
+---
+
+## Java Spring Boot {#java}
+
+```
+project-root/
+├── src/
+│   └── main/
+│       └── java/
+│           └── com/yourapp/
+│               ├── domain/
+│               │   ├── events/
+│               │   │   ├── DomainEvent.java      # record/interface
+│               │   │   └── order/
+│               │   │       ├── OrderPlaced.java
+│               │   │       └── OrderConfirmed.java
+│               │   ├── commands/
+│               │   │   └── order/
+│               │   │       └── PlaceOrderCommand.java
+│               │   └── aggregates/
+│               │       ├── AggregateRoot.java
+│               │       └── Order.java
+│               ├── application/
+│               │   ├── commandhandlers/
+│               │   │   └── PlaceOrderHandler.java
+│               │   └── queryhandlers/
+│               │       └── GetOrderHandler.java
+│               ├── infrastructure/
+│               │   ├── eventstore/
+│               │   │   ├── EventStore.java        # interface
+│               │   │   └── JdbcEventStore.java
+│               │   ├── projections/
+│               │   │   └── OrderListProjection.java
+│               │   └── readmodels/
+│               │       └── OrderReadRepository.java
+│               └── api/
+│                   ├── OrderCommandController.java
+│                   └── OrderQueryController.java
+└── pom.xml / build.gradle
+```
+
+---
+
+## TypeScript / Node.js {#nodejs}
 
 ```
 project-root/
@@ -50,8 +177,8 @@ project-root/
 │   └── api/
 │       ├── commands/
 │       │   └── orders.controller.ts     # POST /orders, POST /orders/:id/confirm
-│       └── queries/
-│           └── orders.query.controller.ts # GET /orders, GET /orders/:id
+│   │       └── queries/
+│       │           └── orders.query.controller.ts # GET /orders, GET /orders/:id
 ├── tests/
 │   ├── unit/
 │   │   └── aggregates/
@@ -114,85 +241,6 @@ project-root/
 │   └── integration/
 ├── pyproject.toml
 └── requirements.txt
-```
-
----
-
-## Java Spring Boot {#java}
-
-```
-project-root/
-├── src/
-│   └── main/
-│       └── java/
-│           └── com/yourapp/
-│               ├── domain/
-│               │   ├── events/
-│               │   │   ├── DomainEvent.java      # record/interface
-│               │   │   └── order/
-│               │   │       ├── OrderPlaced.java
-│               │   │       └── OrderConfirmed.java
-│               │   ├── commands/
-│               │   │   └── order/
-│               │   │       └── PlaceOrderCommand.java
-│               │   └── aggregates/
-│               │       ├── AggregateRoot.java
-│               │       └── Order.java
-│               ├── application/
-│               │   ├── commandhandlers/
-│               │   │   └── PlaceOrderHandler.java
-│               │   └── queryhandlers/
-│               │       └── GetOrderHandler.java
-│               ├── infrastructure/
-│               │   ├── eventstore/
-│               │   │   ├── EventStore.java        # interface
-│               │   │   └── JdbcEventStore.java
-│               │   ├── projections/
-│               │   │   └── OrderListProjection.java
-│               │   └── readmodels/
-│               │       └── OrderReadRepository.java
-│               └── api/
-│                   ├── OrderCommandController.java
-│                   └── OrderQueryController.java
-└── pom.xml / build.gradle
-```
-
----
-
-## Go {#go}
-
-```
-project-root/
-├── internal/
-│   ├── domain/
-│   │   ├── events/
-│   │   │   ├── event.go               # DomainEvent struct + constructor
-│   │   │   └── order_events.go
-│   │   ├── commands/
-│   │   │   └── order_commands.go
-│   │   ├── aggregates/
-│   │   │   ├── aggregate.go           # AggregateRoot base
-│   │   │   └── order.go
-│   │   └── valueobjects/
-│   │       └── money.go
-│   ├── application/
-│   │   ├── handlers/
-│   │   │   ├── place_order.go
-│   │   │   └── get_order.go
-│   │   └── ports/
-│   │       └── event_store.go         # Interface (port)
-│   └── infrastructure/
-│       ├── eventstore/
-│       │   ├── inmemory.go
-│       │   └── postgres.go
-│       ├── projections/
-│       │   └── order_list.go
-│       └── readmodels/
-│           └── order_repo.go
-├── cmd/
-│   └── api/
-│       └── main.go
-└── go.mod
 ```
 
 ---
