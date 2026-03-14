@@ -34,17 +34,29 @@ Dockerfile, API contract, or infrastructure config.
 | Architecture style   | Microservices + Event Sourcing + CQRS                                 |
 | Monorepo tool        | Turborepo (or Nx) — single Git repo, multiple packages                |
 | Frontend             | React 18 + TypeScript + Vite + Tailwind CSS                           |
-| Backend language     | Node.js + TypeScript (all services except IdentityService)            |
-| Backend framework    | Fastify (lightweight, schema-first)                                   |
+| Backend language     | C# + .NET (all services except IdentityService) — preferred first choice |
+| Backend framework    | ASP.NET Core (minimal API or WebAPI) — lightweight, schema-first        |
 | Event bus            | RabbitMQ (AMQP) — async inter-service messaging                       |
 | Event store          | PostgreSQL (append-only `events` table per service)                   |
 | Read models DB       | PostgreSQL (separate schema per service)                              |
 | **Identity & Auth**  | **External IdentityService (.NET 10 + PostgreSQL) — OAuth 2.0 + JWT** |
 | Auth token type      | JWT signed with RSA asymmetric keys (issued by IdentityService)       |
-| API Gateway          | Node.js + Fastify — verifies JWT using IdentityService public key     |
+| API Gateway          | C# + ASP.NET Core — verifies JWT using IdentityService public key     |
 | Containerization     | Docker + Docker Compose (dev), Kubernetes (prod)                      |
 | CI/CD                | GitHub Actions                                                        |
 | Secret management    | Environment variables via `.env` + Docker secrets                     |
+
+## Backend Language Priorities
+
+When implementing services, prioritize languages in this order:
+
+1. **[C#](#csharp)** — First choice for backend services (.NET ecosystem, strong typing, performance)
+2. **[Go](#go)** — Second choice (compiled, efficient, simple concurrency)
+3. **[Java / Spring](#java)** — Third choice (enterprise-grade, extensive libraries)
+4. **[TypeScript / Node.js](#typescript)** — Fourth choice (JavaScript ecosystem, rapid development)
+5. **[Python](#python)** — Fifth choice (data science friendly, easy to learn)
+
+Each service can be implemented in any of these languages, but C# is preferred as the primary backend language.
 
 ---
 
@@ -360,31 +372,31 @@ Every backend service follows this layout (aligned with `event-sourcing` skill):
 ```
 apps/<service-name>/
 ├── src/
-│   ├── domain/
-│   │   ├── events/           # e.g. IncidentCreated.ts
-│   │   ├── commands/         # e.g. CreateIncident.ts
-│   │   ├── aggregates/       # e.g. IncidentAggregate.ts
-│   │   └── value-objects/    # e.g. IncidentStatus.ts
-│   ├── application/
-│   │   ├── command-handlers/ # e.g. CreateIncidentHandler.ts
-│   │   └── query-handlers/   # e.g. GetIncidentByIdHandler.ts
-│   ├── infrastructure/
-│   │   ├── event-store/      # PostgresEventStore.ts
-│   │   ├── projections/      # e.g. IncidentReadModelProjector.ts
-│   │   ├── read-models/      # e.g. IncidentReadModelRepo.ts
-│   │   └── messaging/        # RabbitMQ publisher + consumer
-│   ├── api/
-│   │   ├── routes/           # Fastify route definitions
-│   │   └── schemas/          # JSON Schema for request validation
+│   ├── Domain/
+│   │   ├── Events/           # e.g. IncidentCreated.cs
+│   │   ├── Commands/         # e.g. CreateIncident.cs
+│   │   ├── Aggregates/       # e.g. IncidentAggregate.cs
+│   │   └── ValueObjects/     # e.g. IncidentStatus.cs
+│   ├── Application/
+│   │   ├── CommandHandlers/  # e.g. CreateIncidentHandler.cs
+│   │   └── QueryHandlers/    # e.g. GetIncidentByIdHandler.cs
+│   ├── Infrastructure/
+│   │   ├── EventStore/       # PostgresEventStore.cs
+│   │   ├── Projections/      # e.g. IncidentReadModelProjector.cs
+│   │   ├── ReadModels/       # e.g. IncidentReadModelRepo.cs
+│   │   └── Messaging/        # RabbitMQ publisher + consumer
+│   ├── Api/
+│   │   ├── Controllers/      # ASP.NET Core controllers
+│   │   └── Models/           # Request/response DTOs
 │   ├── config/               # env config, DB connection, RabbitMQ setup
-│   └── main.ts               # Entry point
+│   └── Program.cs            # Entry point
 ├── tests/
-│   ├── unit/
-│   └── integration/
+│   ├── Unit/
+│   └── Integration/
 ├── Dockerfile
 ├── .env.example
-├── package.json
-└── tsconfig.json
+├── <ServiceName>.csproj
+└── appsettings.json
 ```
 
 ---
