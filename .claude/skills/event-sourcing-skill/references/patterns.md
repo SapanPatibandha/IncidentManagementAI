@@ -3,12 +3,395 @@
 Language-specific templates for Event Sourcing + CQRS. Use the section matching the project's language.
 
 ## Table of Contents
-1. [TypeScript / Node.js](#typescript)
-2. [Python](#python)
+1. [C#](#csharp)
+2. [Go](#go)
 3. [Java / Spring](#java)
-4. [Go](#go)
+4. [TypeScript / Node.js](#typescript)
+5. [Python](#python)
 
 ---
+
+## C# {#csharp}
+
+### Domain Event Base Class
+```csharp
+// Domain/Events/DomainEvent.cs
+using System;
+
+public abstract class DomainEvent
+{
+    public Guid EventId { get; private set; }
+    public string EventType { get; private set; }
+    public int EventVersion { get; private set; }
+    public Guid AggregateId { get; private set; }
+    public string AggregateType { get; private set; }
+    public DateTime OccurredAt { get; private set; }
+    public object Payload { get; private set; }
+
+    protected DomainEvent(Guid aggregateId, string aggregateType, object payload, int version = 1)
+    {
+        EventId = Guid.NewGuid();
+        EventType = GetType().Name;
+        EventVersion = version;
+        AggregateId = aggregateId;
+        AggregateType = aggregateType;
+        OccurredAt = DateTime.UtcNow;
+        Payload = payload;
+    }
+}
+```
+
+### Aggregate Root Base Class
+```csharp
+// Domain/Aggregates/AggregateRoot.cs
+using System.Collections.Generic;
+
+public abstract class AggregateRoot
+{
+    private readonly List<DomainEvent> _uncommittedEvents = new List<DomainEvent>();
+    public int Version { get; private set; }
+
+    public IReadOnlyCollection<DomainEvent> UncommittedEvents => _uncommittedEvents.AsReadOnly();
+
+    protected void Apply(DomainEvent @event)
+    {
+        When(@event);
+        _uncommittedEvents.Add(@event);
+        Version++;
+    }
+
+    public void LoadFromHistory(IEnumerable<DomainEvent> events)
+    {
+        foreach (var @event in events)
+        {
+            When(@event);
+            Version++;
+        }
+    }
+
+    public void ClearUncommittedEvents()
+    {
+        _uncommittedEvents.Clear();
+    }
+
+    protected abstract void When(DomainEvent @event);
+}
+```
+
+### Example Aggregate (Order)
+```csharp
+// Domain/Aggregates/Order.cs
+using System;
+using System.Collections.Generic;
+
+public enum OrderStatus
+{
+    Pending,
+    Confirmed,
+    Shipped,
+    Cancelled
+}
+
+public class OrderPlacedEvent : DomainEvent
+{
+    public string CustomerId { get; }
+    public List<OrderItem> Items { get; }
+
+    public OrderPlacedEvent(Guid orderId, string customerId, List<OrderItem> items)
+        : base(orderId, "Order", new { CustomerId = customerId, Items = items })
+    {
+        CustomerId = customerId;
+        Items = items;
+    }
+}
+
+public class OrderConfirmedEvent : DomainEvent
+{
+    public OrderConfirmedEvent(Guid orderId) : base(orderId, "Order", null) { }
+}
+
+public class OrderCancelledEvent : DomainEvent
+{
+    public string Reason { get; }
+
+    public OrderCancelledEvent(Guid orderId, string reason) : base(orderId, "Order", new { Reason = reason })
+    {
+        Reason = reason;
+    }
+}
+
+public class OrderItem
+{
+    public string ProductId { get; }
+    public int Quantity { get; }
+    public decimal Price { get; }
+
+    public OrderItem(string productId, int quantity, decimal price)
+    {
+        ProductId = productId;
+        Quantity = quantity;
+        Price = price;
+    }
+}
+
+public class Order : AggregateRoot
+{
+    public Guid Id { get; private set; }
+    public OrderStatus Status { get; private set; }
+    public string CustomerId { get; private set; }
+    public List<OrderItem> Items { get; private set; } = new List<OrderItem>();
+
+    public static Order Place(Guid orderId, string customerId, List<OrderItem> items)
+    {
+        var order = new Order();
+        order.Apply(new OrderPlacedEvent(orderId, customerId, items));
+        return order;
+    }
+
+    public void Confirm()
+    {
+        if (Status != OrderStatus.Pending)
+        {
+            throw new InvalidOperationException($"Cannot confirm order in status: {Status}");
+        }
+        Apply(new OrderConfirmedEvent(Id));
+    }
+
+    public void Cancel(string reason)
+    {
+        if (Status == OrderStatus.Shipped)
+        {
+            throw new InvalidOperationException("Cannot cancel a shipped order");
+        }
+        Apply(new OrderCancelledEvent(Id, reason));
+    }
+
+    protected override void When(DomainEvent @event)
+    {
+        switch (@event)
+        {
+            case OrderPlacedEvent e:
+                Id = e.AggregateId;
+                CustomerId = e.CustomerId;
+                Items = e.Items;
+                Status = OrderStatus.Pending;
+                break;
+            case OrderConfirmedEvent:
+                Status = OrderStatus.Confirmed;
+                break;
+            case OrderCancelledEvent:
+                Status = OrderStatus.Cancelled;
+                break;
+        }
+    }
+}
+```
+
+### Event Store Interface
+```csharp
+// Infrastructure/EventStore/IEventStore.cs
+using System.Collections.Generic;
+using System.Threading.Tasks;
+
+public interface IEventStore
+{
+    Task AppendAsync(Guid aggregateId, IEnumerable<DomainEvent> events, int expectedVersion);
+    Task<IEnumerable<DomainEvent>> LoadAsync(Guid aggregateId);
+    Task<IEnumerable<DomainEvent>> LoadFromVersionAsync(Guid aggregateId, int fromVersion);
+}
+```
+
+### In-Memory Event Store
+```csharp
+// Infrastructure/EventStore/InMemoryEventStore.cs
+using System.Collections.Concurrent;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+
+public class InMemoryEventStore : IEventStore
+{
+    private readonly ConcurrentDictionary<Guid, List<DomainEvent>> _streams = new();
+
+    public Task AppendAsync(Guid aggregateId, IEnumerable<DomainEvent> events, int expectedVersion)
+    {
+        var stream = _streams.GetOrAdd(aggregateId, _ => new List<DomainEvent>());
+        if (stream.Count != expectedVersion)
+        {
+            throw new ConcurrencyException($"Concurrency conflict on aggregate {aggregateId}");
+        }
+        stream.AddRange(events);
+        return Task.CompletedTask;
+    }
+
+    public Task<IEnumerable<DomainEvent>> LoadAsync(Guid aggregateId)
+    {
+        return Task.FromResult(_streams.TryGetValue(aggregateId, out var events) ? events.AsEnumerable() : Enumerable.Empty<DomainEvent>());
+    }
+
+    public Task<IEnumerable<DomainEvent>> LoadFromVersionAsync(Guid aggregateId, int fromVersion)
+    {
+        if (!_streams.TryGetValue(aggregateId, out var events))
+        {
+            return Task.FromResult(Enumerable.Empty<DomainEvent>());
+        }
+        return Task.FromResult(events.Skip(fromVersion).AsEnumerable());
+    }
+}
+
+public class ConcurrencyException : Exception
+{
+    public ConcurrencyException(string message) : base(message) { }
+}
+```
+
+### Command Handler
+```csharp
+// Application/CommandHandlers/PlaceOrderHandler.cs
+using System.Threading.Tasks;
+
+public class PlaceOrderCommand
+{
+    public Guid OrderId { get; }
+    public string CustomerId { get; }
+    public List<OrderItem> Items { get; }
+
+    public PlaceOrderCommand(Guid orderId, string customerId, List<OrderItem> items)
+    {
+        OrderId = orderId;
+        CustomerId = customerId;
+        Items = items;
+    }
+}
+
+public class PlaceOrderHandler
+{
+    private readonly IEventStore _eventStore;
+
+    public PlaceOrderHandler(IEventStore eventStore)
+    {
+        _eventStore = eventStore;
+    }
+
+    public async Task HandleAsync(PlaceOrderCommand command)
+    {
+        var order = Order.Place(command.OrderId, command.CustomerId, command.Items);
+        await _eventStore.AppendAsync(command.OrderId, order.UncommittedEvents, 0);
+        order.ClearUncommittedEvents();
+    }
+}
+```
+
+## Go {#go}
+
+### Event Base
+```go
+// domain/events/event.go
+package events
+
+import (
+    "time"
+    "github.com/google/uuid"
+)
+
+type DomainEvent struct {
+    EventID       string         `json:"eventId"`
+    EventType     string         `json:"eventType"`
+    EventVersion  int            `json:"eventVersion"`
+    AggregateID   string         `json:"aggregateId"`
+    AggregateType string         `json:"aggregateType"`
+    OccurredAt    time.Time      `json:"occurredAt"`
+    Payload       map[string]any `json:"payload"`
+}
+
+func NewEvent(eventType, aggregateID, aggregateType string, payload map[string]any) DomainEvent {
+    return DomainEvent{
+        EventID:       uuid.NewString(),
+        EventType:     eventType,
+        EventVersion:  1,
+        AggregateID:   aggregateID,
+        AggregateType: aggregateType,
+        OccurredAt:    time.Now().UTC(),
+        Payload:       payload,
+    }
+}
+```
+
+### Aggregate Interface
+```go
+// domain/aggregates/aggregate.go
+package aggregates
+
+import "domain/events"
+
+type AggregateRoot struct {
+    uncommitted []events.DomainEvent
+    Version     int
+}
+
+func (a *AggregateRoot) Apply(event events.DomainEvent, handler func(events.DomainEvent)) {
+    handler(event)
+    a.uncommitted = append(a.uncommitted, event)
+    a.Version++
+}
+
+func (a *AggregateRoot) LoadFromHistory(evts []events.DomainEvent, handler func(events.DomainEvent)) {
+    for _, e := range evts {
+        handler(e)
+        a.Version++
+    }
+}
+
+func (a *AggregateRoot) UncommittedEvents() []events.DomainEvent { return a.uncommitted }
+func (a *AggregateRoot) ClearEvents()                            { a.uncommitted = nil }
+```
+
+## Java / Spring {#java}
+
+### Event Base
+```java
+// domain/events/DomainEvent.java
+public record DomainEvent(
+    String eventId,
+    String eventType,
+    int eventVersion,
+    String aggregateId,
+    String aggregateType,
+    Instant occurredAt,
+    Map<String, Object> payload
+) {
+    public static DomainEvent of(String eventType, String aggregateId, 
+                                  String aggregateType, Map<String, Object> payload) {
+        return new DomainEvent(
+            UUID.randomUUID().toString(), eventType, 1,
+            aggregateId, aggregateType, Instant.now(), payload
+        );
+    }
+}
+```
+
+### Aggregate Base
+```java
+// domain/aggregates/AggregateRoot.java
+public abstract class AggregateRoot {
+    private final List<DomainEvent> uncommittedEvents = new ArrayList<>();
+    protected int version = 0;
+
+    protected void apply(DomainEvent event) {
+        when(event);
+        uncommittedEvents.add(event);
+        version++;
+    }
+
+    public void loadFromHistory(List<DomainEvent> events) {
+        events.forEach(e -> { when(e); version++; });
+    }
+
+    public List<DomainEvent> getUncommittedEvents() { return List.copyOf(uncommittedEvents); }
+    public void clearUncommittedEvents() { uncommittedEvents.clear(); }
+    protected abstract void when(DomainEvent event);
+}
+```
 
 ## TypeScript / Node.js {#typescript}
 
@@ -243,8 +626,6 @@ export class OrderListProjection {
 }
 ```
 
----
-
 ## Python {#python}
 
 ### Event Base
@@ -341,119 +722,4 @@ class Order(AggregateRoot):
                 self.status = "confirmed"
             case "OrderCancelled":
                 self.status = "cancelled"
-```
-
----
-
-## Java / Spring {#java}
-
-### Event Base
-```java
-// domain/events/DomainEvent.java
-public record DomainEvent(
-    String eventId,
-    String eventType,
-    int eventVersion,
-    String aggregateId,
-    String aggregateType,
-    Instant occurredAt,
-    Map<String, Object> payload
-) {
-    public static DomainEvent of(String eventType, String aggregateId, 
-                                  String aggregateType, Map<String, Object> payload) {
-        return new DomainEvent(
-            UUID.randomUUID().toString(), eventType, 1,
-            aggregateId, aggregateType, Instant.now(), payload
-        );
-    }
-}
-```
-
-### Aggregate Base
-```java
-// domain/aggregates/AggregateRoot.java
-public abstract class AggregateRoot {
-    private final List<DomainEvent> uncommittedEvents = new ArrayList<>();
-    protected int version = 0;
-
-    protected void apply(DomainEvent event) {
-        when(event);
-        uncommittedEvents.add(event);
-        version++;
-    }
-
-    public void loadFromHistory(List<DomainEvent> events) {
-        events.forEach(e -> { when(e); version++; });
-    }
-
-    public List<DomainEvent> getUncommittedEvents() { return List.copyOf(uncommittedEvents); }
-    public void clearUncommittedEvents() { uncommittedEvents.clear(); }
-    protected abstract void when(DomainEvent event);
-}
-```
-
----
-
-## Go {#go}
-
-### Event Base
-```go
-// domain/events/event.go
-package events
-
-import (
-    "time"
-    "github.com/google/uuid"
-)
-
-type DomainEvent struct {
-    EventID       string         `json:"eventId"`
-    EventType     string         `json:"eventType"`
-    EventVersion  int            `json:"eventVersion"`
-    AggregateID   string         `json:"aggregateId"`
-    AggregateType string         `json:"aggregateType"`
-    OccurredAt    time.Time      `json:"occurredAt"`
-    Payload       map[string]any `json:"payload"`
-}
-
-func NewEvent(eventType, aggregateID, aggregateType string, payload map[string]any) DomainEvent {
-    return DomainEvent{
-        EventID:       uuid.NewString(),
-        EventType:     eventType,
-        EventVersion:  1,
-        AggregateID:   aggregateID,
-        AggregateType: aggregateType,
-        OccurredAt:    time.Now().UTC(),
-        Payload:       payload,
-    }
-}
-```
-
-### Aggregate Interface
-```go
-// domain/aggregates/aggregate.go
-package aggregates
-
-import "domain/events"
-
-type AggregateRoot struct {
-    uncommitted []events.DomainEvent
-    Version     int
-}
-
-func (a *AggregateRoot) Apply(event events.DomainEvent, handler func(events.DomainEvent)) {
-    handler(event)
-    a.uncommitted = append(a.uncommitted, event)
-    a.Version++
-}
-
-func (a *AggregateRoot) LoadFromHistory(evts []events.DomainEvent, handler func(events.DomainEvent)) {
-    for _, e := range evts {
-        handler(e)
-        a.Version++
-    }
-}
-
-func (a *AggregateRoot) UncommittedEvents() []events.DomainEvent { return a.uncommitted }
-func (a *AggregateRoot) ClearEvents()                            { a.uncommitted = nil }
 ```
