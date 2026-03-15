@@ -49,12 +49,12 @@ A microservices-based Incident Management platform with:
 - [X] **Phase 3** — Incident Service (core domain — Event Sourcing)
 - [X] **Phase 4** — User Service
 - [X] **Phase 5** — Notification Service
-- [ ] **Phase 6** — Analytics Service
+- [X] **Phase 6** — Analytics Service
 - [ ] **Phase 7** — React Frontend
 - [ ] **Phase 8** — Integration Testing
 - [ ] **Phase 9** — CI/CD
 
-**Currently working on:** Phase 6 — Analytics Service
+**Currently working on:** Phase 7 — React Frontend
 
 ---
 

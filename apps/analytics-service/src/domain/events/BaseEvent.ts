@@ -1,0 +1,35 @@
+export interface BaseEvent {
+  eventId: string;
+  eventType: string;
+  aggregateId: string;
+  aggregateType: string;
+  payload: any;
+  metadata: {
+    occurredAt: Date;
+    version: number;
+  };
+}
+
+export class DomainEvent implements BaseEvent {
+  public readonly eventId: string;
+  public readonly eventType: string;
+  public readonly aggregateId: string;
+  public readonly aggregateType: string;
+  public readonly payload: any;
+  public readonly metadata: {
+    occurredAt: Date;
+    version: number;
+  };
+
+  constructor(aggregateId: string, payload: any, version = 1) {
+    this.eventId = crypto.randomUUID();
+    this.eventType = this.constructor.name;
+    this.aggregateId = aggregateId;
+    this.aggregateType = 'Incident';
+    this.payload = payload;
+    this.metadata = {
+      occurredAt: new Date(),
+      version,
+    };
+  }
+}

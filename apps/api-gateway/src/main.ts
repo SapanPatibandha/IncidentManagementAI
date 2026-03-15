@@ -9,6 +9,7 @@ import { registerRoutes } from './routes';
 import { errorHandler } from './errors/errorHandler';
 import { verifyJwt } from './middleware/verifyJwt';
 import { injectUserContext } from './middleware/injectUserContext';
+import { enforceRole } from './middleware/enforceRole';
 
 async function main() {
   const app = Fastify({
@@ -33,6 +34,7 @@ async function main() {
   // Global hooks (after routes to allow health bypass)
   app.addHook('preHandler', verifyJwt);
   app.addHook('preHandler', injectUserContext);
+  app.addHook('preHandler', enforceRole);
 
   // Error handler
   app.setErrorHandler(errorHandler);

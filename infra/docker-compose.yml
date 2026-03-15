@@ -20,6 +20,8 @@ services:
       POSTGRES_PASSWORD: password
     ports:
       - "5433:5432"
+    volumes:
+      - postgres_user_data:/var/lib/postgresql/data
 
   postgres-notification:
     image: postgres:15
@@ -29,6 +31,19 @@ services:
       POSTGRES_PASSWORD: password
     ports:
       - "5434:5432"
+    volumes:
+      - postgres_notification_data:/var/lib/postgresql/data
+
+  postgres-analytics:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: analytics_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+    ports:
+      - "5435:5432"
+    volumes:
+      - postgres_analytics_data:/var/lib/postgresql/data
 
   postgres-identity:
     image: postgres:15
@@ -38,6 +53,17 @@ services:
       POSTGRES_PASSWORD: password
     ports:
       - "5436:5432"
+    volumes:
+      - postgres_identity_data:/var/lib/postgresql/data
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: admin
+      RABBITMQ_DEFAULT_PASS: password
 
   user-service:
     build:
@@ -75,6 +101,22 @@ services:
       - postgres-notification
       - rabbitmq
 
+  analytics-service:
+    build:
+      context: ..
+      dockerfile: apps/analytics-service/Dockerfile
+    environment:
+      NODE_ENV: development
+      PORT: 3005
+      DATABASE_URL: postgresql://postgres:password@postgres-analytics:5432/analytics_db
+      RABBITMQ_URL: amqp://admin:password@rabbitmq:5672
+      LOG_LEVEL: info
+    ports:
+      - "3005:3005"
+    depends_on:
+      - postgres-analytics
+      - rabbitmq
+
   identity-service:
     image: your-identity-service-image:latest  # Replace with actual image
     environment:
@@ -86,3 +128,7 @@ services:
 
 volumes:
   postgres_incident_data:
+  postgres_user_data:
+  postgres_notification_data:
+  postgres_analytics_data:
+  postgres_identity_data:
